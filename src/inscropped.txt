@@ -1,0 +1,41 @@
+% === Load detector and training data ===
+load('C:/yolo/insulatorYOLOv4.mat', 'detector');
+load('C:/yolo/insulator_trainingData.mat', 'trainingData');
+
+% === Output folder to save cropped images ===
+outputFolder = 'C:/yolo/croppedInsulators';
+if ~exist(outputFolder, 'dir'); mkdir(outputFolder); end
+
+reset(trainingData);  % Rewind datastore
+count = 1;
+
+% === Loop over each image and detect + crop objects ===
+while hasdata(trainingData)
+    data = read(trainingData);
+    I = data{1};  % Input image
+
+    % Run YOLOv4 detection
+    [bboxes, scores, labels] = detect(detector, I);
+
+    for i = 1:size(bboxes, 1)
+        % Crop the detected region
+        crop = imcrop(I, bboxes(i, :));
+
+        % Ensure non-empty and valid crop
+        if isempty(crop) || size(crop,1) < 20 || size(crop,2) < 20
+            continue;
+        end
+
+        % Get label (e.g., "insulator", "defect")
+        label = char(labels(i));
+        classFolder = fullfile(outputFolder, label);
+        if ~exist(classFolder, 'dir'); mkdir(classFolder); end
+
+        % Save cropped image
+        filename = fullfile(classFolder, sprintf('%s_%04d.jpg', label, count));
+        imwrite(crop, filename);
+        count = count + 1;
+    end
+end
+
+disp("✅ Cropped images saved to: " + outputFolder);

@@ -1,0 +1,82 @@
+>> % === Load class names ===
+classFile = 'C:\yolo\insulators\classes.txt';
+classNames = strtrim(readlines(classFile));  % e.g., ["insulator", "defect"]
+
+% === Set paths ===
+imgDir = 'C:\yolo\insulators\images';
+labelDir = 'C:\yolo\insulators\labels';
+
+% === Get all image files ===
+imgFiles = dir(fullfile(imgDir, '*.jpg'));
+numFiles = numel(imgFiles);
+
+% === Initialize containers ===
+imageFilename = {};
+labelData = cell(0, numel(classNames));  % Dynamic cell table for label columns
+
+for i = 1:numFiles
+    % Get image and corresponding label file
+    imgName = imgFiles(i).name;
+    imgPath = fullfile(imgDir, imgName);
+    labelPath = fullfile(labelDir, replace(imgName, '.jpg', '.txt'));
+
+    % Read image size
+    I = imread(imgPath);
+    [h, w, ~] = size(I);
+
+    % Prepare bounding boxes for each class
+    bboxPerClass = cell(1, numel(classNames));
+    for k = 1:numel(classNames)
+        bboxPerClass{k} = zeros(0, 4);  % [x y width height]
+    end
+
+    % Read YOLO label file
+    if isfile(labelPath)
+        lines = readlines(labelPath);
+        for j = 1:numel(lines)
+            vals = str2double(split(lines(j)));
+            if numel(vals) < 5, continue; end
+
+            classIdx = vals(1) + 1;  % MATLAB is 1-indexed
+            if classIdx > numel(classNames), continue; end
+
+            % Convert normalized YOLO to absolute format
+            x_center = vals(2) * w;
+            y_center = vals(3) * h;
+            box_w = vals(4) * w;
+            box_h = vals(5) * h;
+
+            x = x_center - box_w / 2;
+            y = y_center - box_h / 2;
+
+            bboxPerClass{classIdx} = [bboxPerClass{classIdx}; x, y, box_w, box_h];
+        end
+    end
+
+    % === Convert bboxes to string format per class ===
+    for k = 1:numel(classNames)
+        boxes = bboxPerClass{k};
+        if isempty(boxes)
+            bboxPerClass{k} = "";
+        else
+            % Convert each bbox row to "x y w h"
+            strBoxes = join(string(round(boxes, 2)), " ", 2);  % round and join each row
+            bboxPerClass{k} = join(strBoxes, "; ");            % join all with semicolon
+        end
+    end
+
+    % Store image and string-format labels
+    imageFilename{end+1, 1} = imgPath;
+    labelData(end+1, :) = bboxPerClass;
+end
+
+% === Final dataset table ===
+insulatorDataset = cell2table([imageFilename, labelData], ...
+    'VariableNames', ["imageFilename"; classNames]);
+
+% === Save dataset ===
+save('C:\yolo\insulatorDataset_StringLabels.mat', 'insulatorDataset');
+disp("✅ Saved dataset with string labels to C:\yolo\insulatorDataset_StringLabels.mat");
+
+
+
